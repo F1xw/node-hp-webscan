@@ -9,7 +9,7 @@ Only tested with **HP Envy 6432e**.
 ## Installation
 
 ```bash
-npm install @f1xw/hp-webscan-client
+npm install hp-webscan-client
 ```
 
 ## Usage
