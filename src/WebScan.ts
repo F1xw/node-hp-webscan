@@ -1,6 +1,17 @@
-import fs from "node:fs";
+import {writeFileSync} from "node:fs";
 import { DOMParser } from "@xmldom/xmldom";
-import { IScanOutput, IScanRegion } from "./types";
+
+interface IScanRegion {
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
+}
+
+interface IScanOutput {
+    format: "application/pdf" | "image/jpeg";
+    path: string;
+}
 
 interface IDeviceInfo {
     ip: string;
@@ -82,7 +93,7 @@ export class WebScan {
                 console.log("Error while downloading document.");
                 return false;
             }
-            fs.writeFileSync(
+            writeFileSync(
                 options.output.path,
                 Buffer.from(await req.arrayBuffer())
             );
