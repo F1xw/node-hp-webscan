@@ -120,8 +120,8 @@ const scanSettings = (options: IScanDocumentOptions) =>
             ? "application/pdf"
             : options.output.format || "application/pdf"
     }</scan:DocumentFormatExt>
-<scan:XResolution>${options.resolution || 300}</scan:XResolution>
-<scan:YResolution>${options.resolution || 300}</scan:YResolution>
+<scan:XResolution>${options.source === "Platen" ? options.resolution || 300 : "85"}</scan:XResolution>
+<scan:YResolution>${options.source === "Platen" ? options.resolution || 300 : "85"}</scan:YResolution>
 <scan:ColorMode>${options.color ? "RGB24" : "Grayscale8"}</scan:ColorMode>
 <scan:CompressionFactor>25</scan:CompressionFactor>
 <scan:Brightness>${options.brightness || 1000}</scan:Brightness>
