@@ -3,11 +3,15 @@
   "version": "1.0.1",
   "description": "Send scan requests to an HP printer",
   "main": "lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/F1xw/node-hp-webscan"
+  },
   "scripts": {
     "build": "npx tsc --declaration"
   },
   "author": "Florian Weißmeier-Dörste",
-  "license": "ISC",
+  "license": "GPL-3",
   "dependencies": {
     "@xmldom/xmldom": "^0.8.8"
   },
