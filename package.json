@@ -1,0 +1,19 @@
+{
+  "name": "hp-webscan",
+  "version": "1.0.0",
+  "description": "Send scan request to an HP printer",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx tsc && node ./build/test.js",
+    "build": "npx tsc"
+  },
+  "author": "Florian Weißmeier-Dörste",
+  "license": "ISC",
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.1",
+    "typescript": "^5.1.6"
+  }
+}
