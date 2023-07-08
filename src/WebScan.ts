@@ -1,112 +1,108 @@
-import {writeFileSync} from "node:fs";
+import { writeFileSync } from "node:fs";
 import { DOMParser } from "@xmldom/xmldom";
-
-interface IScanRegion {
-    width: number;
-    height: number;
-    offsetX: number;
-    offsetY: number;
-}
-
-interface IScanOutput {
-    format: "application/pdf" | "image/jpeg";
-    path: string;
-}
-
-interface IDeviceInfo {
-    ip: string;
-}
-
-export interface IWebScanOptions {
-    deviceInfo: IDeviceInfo;
-}
-
-export interface IScanDocumentOptions {
-    region?: IScanRegion;
-    source?: "Platen" | "Feeder";
-    output: IScanOutput;
-    resolution?: "75" | "200" | "300" | "600";
-    color: boolean;
-    brightness?: 1000 | number;
-    contrast?: 1000 | number;
-}
+import { IScanDocumentBufferOptions, IScanDocumentOptions, IWebScanOptions } from "./types";
 
 export class WebScan {
-    private deviceInfo: IDeviceInfo;
+    private options: IWebScanOptions;
 
     constructor(options: IWebScanOptions) {
-        this.deviceInfo = options.deviceInfo;
+        this.options = options;
     }
 
-    async scanToFile(options: IScanDocumentOptions): Promise<boolean> {
+    private async getLatestScanUrl(): Promise<string | null> {
         try {
             const req = await fetch(
-                `http://${this.deviceInfo?.ip}/eSCL/ScanJobs`,
-                {
-                    method: "POST",
-                    body: tmpScanSettings(options),
-                }
-            );
-            if (req.status !== 201) {
-                console.log("Error while requesting scan.");
-                return false;
-            }
-        } catch (error) {
-            console.log("Error while requesting scan.");
-            console.log(error);
-            return false;
-        }
-
-        let scanJob;
-        try {
-            const req = await fetch(
-                `http://${this.deviceInfo?.ip}/eSCL/ScannerStatus`,
+                `http://${this.options?.ip}/eSCL/ScannerStatus`,
                 {
                     method: "GET",
                 }
             );
             if (req.status !== 200) {
-                console.log("Error while fetching scan status.");
-                return false;
+                throw new Error(`Expected status code 200 but got ${req.status} instead while requesting the latest scan job URL.`)
             }
             const xmlTree = new DOMParser().parseFromString(
                 await req.text(),
                 "text/xml"
             );
-            scanJob = xmlTree
+            return xmlTree
                 .getElementsByTagName("scan:JobInfo")[0]
                 .getElementsByTagName("pwg:JobUri")[0].textContent;
         } catch (error) {
-            console.log("Error while fetching scan status.");
-            console.log(error);
-            return false;
+            throw new Error("An error occurred while requesting the latest scan job URL.")
         }
+    }
 
+    private async getDocumentBuffer(scanUrl: string): Promise<Buffer> {
         try {
             const req = await fetch(
-                `http://${this.deviceInfo?.ip}${scanJob}/NextDocument`,
+                `http://${this.options?.ip}${scanUrl}/NextDocument`,
                 {
                     method: "GET",
                 }
             );
             if (req.status !== 200) {
-                console.log("Error while downloading document.");
-                return false;
+                throw new Error(`Expected response code 200 but got ${req.status} instead while downloading the document.`)
             }
-            writeFileSync(
-                options.output.path,
-                Buffer.from(await req.arrayBuffer())
-            );
-            return true;
+            return Buffer.from(await req.arrayBuffer());
         } catch (error) {
-            console.log("Error while downloading document.");
-            console.log(error);
-            return false;
+            throw new Error("An error occurred while downloading the scanned document.")
         }
+    }
+
+    private async requestScanJob(
+        options: IScanDocumentOptions
+    ): Promise<boolean> {
+        try {
+            const req = await fetch(
+                `http://${this.options?.ip}/eSCL/ScanJobs`,
+                {
+                    method: "POST",
+                    body: scanSettings(options),
+                }
+            );
+            if (req.status !== 201) {
+                throw new Error(
+                    `Expected response code 201 but got ${req.status} instead when requesting scan job.`
+                );
+            }
+        } catch (error) {
+            throw new Error(`An error occurred while requesting the scan job.`);
+        }
+        return true;
+    }
+
+    async scanToBuffer(options: IScanDocumentBufferOptions): Promise<Buffer | null> {
+        await this.requestScanJob({...options, output:{format: options.format, path: ""}});
+        const scanJob = await this.getLatestScanUrl();
+        if (!scanJob) {
+            throw new Error(
+                "An error occurred while requesting the document from the printer."
+            );
+        }
+        const document = await this.getDocumentBuffer(scanJob);
+        return document;
+    }
+
+    async scanToFile(options: IScanDocumentOptions): Promise<void> {
+        await this.requestScanJob(options);
+        const scanJob = await this.getLatestScanUrl();
+        if (!scanJob) {
+            throw new Error(
+                "An error occurred while requesting the document from the printer."
+            );
+        }
+        const document = await this.getDocumentBuffer(scanJob);
+        if (!document) {
+            throw new Error(
+                "There was an error while receiving the scanned document."
+            );
+        }
+
+        writeFileSync(options.output.path, document);
     }
 }
 
-const tmpScanSettings = (options: IScanDocumentOptions) =>
+const scanSettings = (options: IScanDocumentOptions) =>
     `<scan:ScanSettings xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03" xmlns:copy="http://www.hp.com/schemas/imaging/con/copy/2008/07/07" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/" xmlns:dd3="http://www.hp.com/schemas/imaging/con/dictionaries/2009/04/06" xmlns:fw="http://www.hp.com/schemas/imaging/con/firewall/2011/01/05" xmlns:scc="http://schemas.hp.com/imaging/escl/2011/05/03" xmlns:pwg="http://www.pwg.org/schemas/2010/12/sm">
 <pwg:Version>2.1</pwg:Version>
 <scan:Intent>Document</scan:Intent>
@@ -119,10 +115,14 @@ const tmpScanSettings = (options: IScanDocumentOptions) =>
     </pwg:ScanRegion>
 </pwg:ScanRegions>
 <pwg:InputSource>${options.source || "Platen"}</pwg:InputSource>
-<scan:DocumentFormatExt>${options.source === "Feeder" ? "application/pdf" : options.output.format || "application/pdf"}</scan:DocumentFormatExt>
+<scan:DocumentFormatExt>${
+        options.source === "Feeder"
+            ? "application/pdf"
+            : options.output.format || "application/pdf"
+    }</scan:DocumentFormatExt>
 <scan:XResolution>${options.resolution || 300}</scan:XResolution>
 <scan:YResolution>${options.resolution || 300}</scan:YResolution>
-<scan:ColorMode>${options.color ? "RGB24" : "BW"}</scan:ColorMode>
+<scan:ColorMode>${options.color ? "RGB24" : "Grayscale8"}</scan:ColorMode>
 <scan:CompressionFactor>25</scan:CompressionFactor>
 <scan:Brightness>${options.brightness || 1000}</scan:Brightness>
 <scan:Contrast>${options.contrast || 1000}</scan:Contrast>

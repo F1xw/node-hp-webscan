@@ -15,13 +15,11 @@ npm install hp-webscan-client
 ## Usage
 
 ```js
-import {WebScan} from "@f1xw/hp-webscan-client"
+import {WebScan} from "hp-webscan-client"
 
 // Create a new WebScan instance
 const client = new WebScan({
-    deviceInfo: {
-        ip: PRINTER_IP"
-    }
+    ip: "PRINTER_IP"
 });
 
 // Start scanning process and save file to output.pdf
@@ -31,5 +29,11 @@ client.scanToFile({
         format: "application/pdf",
         path: "output.pdf"
     }
+});
+
+// Start scanning process and return document as buffer
+const buffer = client.scanToBuffer({
+    color: true,
+    format: "application/pdf"
 });
 ```
